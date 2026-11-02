@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gui-control"
+version = "0.1.0"
+description = "Drive and inspect a running Qt Quick application through a preloaded control hook"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+gui-control = "gui_control.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["gui_control*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

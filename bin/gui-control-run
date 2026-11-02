@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+HOOK_LIB="${GUI_CONTROL_LIB:-${ROOT}/build/libguicontrol.so}"
+
+if [[ $# -eq 0 ]]; then
+    echo "usage: gui-control-run <qt-quick-application> [arguments...]" >&2
+    exit 2
+fi
+
+if [[ ! -f "${HOOK_LIB}" ]]; then
+    echo "gui-control-run: hook library not found at ${HOOK_LIB}; build it or set GUI_CONTROL_LIB" >&2
+    exit 2
+fi
+
+export LD_PRELOAD="${HOOK_LIB}${LD_PRELOAD:+:${LD_PRELOAD}}"
+exec "$@"
