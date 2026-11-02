@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="0 0 1200 1240" role="img" aria-labelledby="title desc">
+<title id="title">Roles decide what gui-control screen prints</title>
+<desc id="desc">An excerpt of the demo application's item tree with the role the Qt Quick backend gives each item. Containers (QQuickRootItem, QQuickControl, QQuickContentItem, QQuickColumnLayout) are left out and their children move up. ButtonPanel is a plain item without a name or content and is left out. QQuickIconLabel and QQuickMnemonicLabel repeat the button's text and are left out. StackView, Page, Label, Button and QQuickListView are kept. Below, the real output of gui-control screen for the same application.</desc>
+<defs><style>
+text{font-family:Arial,Helvetica,sans-serif;fill:#18314f}
+.kicker{font-size:14px;font-weight:700;letter-spacing:1.4px;fill:#486080}
+.title{font-size:30px;font-weight:700}
+.subtitle{font-size:18px;fill:#526780}
+.heading{font-size:20px;font-weight:700}
+.small{font-size:16px;fill:#526780}
+.mono{font-size:16px;font-family:'DejaVu Sans Mono',Menlo,Consolas,monospace;fill:#18314f}
+.code{font-size:15px;font-family:'DejaVu Sans Mono',Menlo,Consolas,monospace;fill:#18314f}
+.kept{font-weight:700}
+.gone{fill:#8a9bb0}
+.outcome-kept{font-size:16px;font-weight:700;fill:#18314f}
+.tag-kept{fill:#eef4ff;stroke:#486080;stroke-width:1.5}
+.tag-gone{fill:none;stroke:#9cb7d9;stroke-width:1.5;stroke-dasharray:5 4}
+.soft{fill:#f5f7fb;stroke:#d6e0ed}
+.rule{stroke:#d6e0ed;stroke-width:1.5}
+</style></defs>
+<rect width="1200" height="1240" fill="white"/>
+<text x="40" y="46" class="kicker">GUI-CONTROL · COMPACT SCREEN VIEW</text>
+<text x="40" y="90" class="title">Roles decide what screen prints</text>
+<text x="40" y="124" class="subtitle">The backend tags every item with a role. The client keeps or leaves out items by role and repeated content only.</text>
+
+<g id="columns">
+<text x="60" y="190" class="kicker">ITEM, INDENTED BY DEPTH</text>
+<text x="560" y="190" class="kicker">ROLE</text>
+<text x="712" y="190" class="kicker">CONTENT</text>
+<text x="936" y="190" class="kicker">IN THE SCREEN VIEW</text>
+<line x1="40" y1="206" x2="1160" y2="206" class="rule"/>
+</g>
+
+<g id="tree">
+<g id="row-root-item"><text x="60" y="236" class="mono gone">QQuickRootItem</text>
+<rect x="560" y="216" width="128" height="28" rx="14" class="tag-gone"/><text x="624" y="235" class="code gone" text-anchor="middle">container</text>
+<text x="936" y="236" class="small">left out: container</text></g>
+
+<g id="row-content-control"><text x="82" y="276" class="mono gone">QQuickControl</text>
+<rect x="560" y="256" width="128" height="28" rx="14" class="tag-gone"/><text x="624" y="275" class="code gone" text-anchor="middle">container</text>
+<text x="936" y="276" class="small">left out: container</text></g>
+
+<g id="row-window-content"><text x="104" y="316" class="mono gone">QQuickContentItem</text>
+<rect x="560" y="296" width="128" height="28" rx="14" class="tag-gone"/><text x="624" y="315" class="code gone" text-anchor="middle">container</text>
+<text x="936" y="316" class="small">left out: container</text></g>
+
+<g id="row-stack-view"><text x="126" y="356" class="mono kept">StackView</text>
+<rect x="560" y="336" width="128" height="28" rx="14" class="tag-kept"/><text x="624" y="355" class="code" text-anchor="middle">page</text>
+<text x="936" y="356" class="outcome-kept">kept</text></g>
+
+<g id="row-home-page"><text x="148" y="396" class="mono kept">Page #homePage</text>
+<rect x="560" y="376" width="128" height="28" rx="14" class="tag-kept"/><text x="624" y="395" class="code" text-anchor="middle">page</text>
+<text x="712" y="396" class="code">title="Home"</text>
+<text x="936" y="396" class="outcome-kept">kept</text></g>
+
+<g id="row-page-content"><text x="170" y="436" class="mono gone">QQuickContentItem</text>
+<rect x="560" y="416" width="128" height="28" rx="14" class="tag-gone"/><text x="624" y="435" class="code gone" text-anchor="middle">container</text>
+<text x="936" y="436" class="small">left out: container</text></g>
+
+<g id="row-column-layout"><text x="192" y="476" class="mono gone">QQuickColumnLayout</text>
+<rect x="560" y="456" width="128" height="28" rx="14" class="tag-gone"/><text x="624" y="475" class="code gone" text-anchor="middle">container</text>
+<text x="936" y="476" class="small">left out: container</text></g>
+
+<g id="row-counter-label"><text x="214" y="516" class="mono kept">Label #counterLabel</text>
+<rect x="560" y="496" width="128" height="28" rx="14" class="tag-kept"/><text x="624" y="515" class="code" text-anchor="middle">text</text>
+<text x="712" y="516" class="code">text="Clicked 0 times"</text>
+<text x="936" y="516" class="outcome-kept">kept</text></g>
+
+<g id="row-increment-button"><text x="214" y="556" class="mono kept">Button #incrementButton</text>
+<rect x="560" y="536" width="128" height="28" rx="14" class="tag-kept"/><text x="624" y="555" class="code" text-anchor="middle">button</text>
+<text x="712" y="556" class="code">text="Increment"</text>
+<text x="936" y="556" class="outcome-kept">kept</text></g>
+
+<g id="row-button-panel"><text x="236" y="596" class="mono gone">ButtonPanel</text>
+<rect x="560" y="576" width="128" height="28" rx="14" class="tag-gone"/><text x="624" y="595" class="code gone" text-anchor="middle">item</text>
+<text x="936" y="596" class="small">left out: unnamed, empty</text></g>
+
+<g id="row-icon-label"><text x="236" y="636" class="mono gone">QQuickIconLabel</text>
+<rect x="560" y="616" width="128" height="28" rx="14" class="tag-gone"/><text x="624" y="635" class="code gone" text-anchor="middle">item</text>
+<text x="712" y="636" class="code gone">text="Increment"</text>
+<text x="936" y="636" class="small">left out: repeats its owner</text></g>
+
+<g id="row-mnemonic-label"><text x="258" y="676" class="mono gone">QQuickMnemonicLabel #label</text>
+<rect x="560" y="656" width="128" height="28" rx="14" class="tag-gone"/><text x="624" y="675" class="code gone" text-anchor="middle">text</text>
+<text x="712" y="676" class="code gone">text="Increment"</text>
+<text x="936" y="676" class="small">left out: repeats its owner</text></g>
+
+<g id="row-fruit-list"><text x="214" y="716" class="mono kept">QQuickListView #fruitList</text>
+<rect x="560" y="696" width="128" height="28" rx="14" class="tag-kept"/><text x="624" y="715" class="code" text-anchor="middle">scrollable</text>
+<text x="936" y="716" class="outcome-kept">kept</text></g>
+</g>
+
+<g id="screen-output" xml:space="preserve">
+<text x="40" y="786" class="heading">What gui-control screen prints for this application</text>
+<rect x="40" y="806" width="1120" height="340" rx="10" class="soft"/>
+<text x="64" y="840" class="code gone">$ gui-control screen</text>
+<text x="64" y="866" class="code">window 'gui-control demo' 480x640</text>
+<text x="64" y="892" class="code">StackView (0,0 480x640)</text>
+<text x="82" y="918" class="code">Page #homePage (0,0 480x640)  title="Home"</text>
+<text x="100" y="944" class="code">Label #counterLabel (16,16 92x14)  text="Clicked 0 times"</text>
+<text x="100" y="970" class="code">Button #incrementButton (16,42 80x24)  text="Increment" checked=false</text>
+<text x="100" y="996" class="code">TextField #nameField (16,78 120x24)  placeholderText="Your name"</text>
+<text x="100" y="1022" class="code">Switch #darkSwitch (16,114 87x28)  text="Dark" checked=false</text>
+<text x="100" y="1048" class="code">Button #detailsButton (16,154 80x24)  text="Details" checked=false</text>
+<text x="100" y="1074" class="code">QQuickListView #fruitList (16,190 448x434) [clip]</text>
+<text x="118" y="1100" class="code">ItemDelegate (16,190 448x26)  text="Fruit 0" checked=false</text>
+<text x="118" y="1126" class="code gone">…</text>
+</g>
+
+<text x="40" y="1186" class="small">Kept rows: bold text and a solid role outline. Left-out rows: grey text and a dashed role outline.</text>
+<text x="40" y="1210" class="small">The tree is an excerpt of examples/demo.qml; the box shows the real command output for the same application.</text>
+</svg>

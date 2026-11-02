@@ -13,6 +13,8 @@ gui-control has two halves joined by a small JSON protocol:
   contains no knowledge of any GUI technology, so scripts, tests and AI agents work the same against
   any backend.
 
+![The client chain (agent or test, gui-control CLI, Gui, GuiClient) sends one JSON line per request over TCP to ControlServer inside the application process and reads one JSON line back. ControlServer, Scene and Actions form libguicontrol.so, the Qt Quick backend: Scene reads the application's QQuickWindow item tree, Actions sends input events to it. A backend for another GUI technology could answer the same requests; it is not built yet.](docs/diagrams/structure.svg)
+
 ## How it works
 
 - `libguicontrol.so` is loaded into the application with `LD_PRELOAD`. The application's source and
@@ -37,6 +39,12 @@ gui-control has two halves joined by a small JSON protocol:
 - **Waiting:** until no frame has been rendered for a quiet period, until a page transition has
   finished, until an item appears or disappears, or until a signal fires.
 
+One `gui-control tap` uses four kinds of request. The client checks that the target can be tapped,
+the backend turns the selector into a point and sends real mouse events, and the client waits until
+the screen has settled:
+
+![Sequence of gui-control tap '#save': the client resolves the target and pings for the window size, repeats get until the item is visible, enabled and on screen (scrolling it into view when needed), then sends tap. ControlServer matches the selector, scrolls the item into view and sends a mouse press and release at its centre to the QQuickWindow, where the button emits clicked(). The client then sends wait settled, and ControlServer replies once any StackView transition has finished and no frame has been rendered for 300 ms, at most 8 s.](docs/diagrams/tap-sequence.svg)
+
 ## Requirements
 
 - Linux (the Qt Quick backend is injected with `LD_PRELOAD`).
@@ -47,16 +55,20 @@ gui-control has two halves joined by a small JSON protocol:
 
 ## Build the Qt Quick backend
 
-    cmake -S . -B build -DCMAKE_PREFIX_PATH=$HOME/Qt/6.8.1/gcc_64
-    cmake --build build
+```sh
+cmake -S . -B build -DCMAKE_PREFIX_PATH=$HOME/Qt/6.8.1/gcc_64
+cmake --build build
+```
 
 The build writes `build/libguicontrol.so` and `build/gui-control-launch`.
 
 ## Start an application with the backend
 
-    bin/gui-control-run ./my-qt-quick-app --its-arguments
-    bin/gui-control-run qml examples/demo.qml
-    QT_QPA_PLATFORM=offscreen GUI_CONTROL_PORT=7900 bin/gui-control-run ./my-qt-quick-app
+```sh
+bin/gui-control-run ./my-qt-quick-app --its-arguments
+bin/gui-control-run qml examples/demo.qml
+QT_QPA_PLATFORM=offscreen GUI_CONTROL_PORT=7900 bin/gui-control-run ./my-qt-quick-app
+```
 
 `gui-control-run` puts the library in front of `LD_PRELOAD` and starts the command. The application
 logs `[gui-control] listening on 127.0.0.1:7801` once the server is up.
@@ -67,32 +79,36 @@ set `GUI_CONTROL_TARGET` to the real binary and `GUI_CONTROL_LIB` to the library
 `LD_PRELOAD` at the last moment and replaces itself with the target, keeping any loader prefix on the
 command line.
 
+![Start-up: gui-control-run puts libguicontrol.so first in LD_PRELOAD and execs the application, or gui-control-launch takes the application's place under a wrapper script and execs GUI_CONTROL_TARGET. The dynamic loader maps the application and the library, the application constructs QGuiApplication, and Qt runs the library's startup function. In a GUI application ControlServer listens on 127.0.0.1:7801; without a QGuiApplication or with GUI_CONTROL_ENABLED=0 the library does nothing.](docs/diagrams/startup.svg)
+
 ## Command line
 
 Install with `pip install -e python`, or run `bin/gui-control` from the checkout without installing.
 
-    gui-control ping                               is the backend up; which one, its ops, window title and size
-    gui-control screen                             compact item tree: types, objectNames, rects, text and values
-    gui-control screen --raw                       every item with every reported property
-    gui-control screen '#settingsPage'             only the subtree under a selector
-    gui-control tap '#okButton'                    tap an item (waits until it is enabled and on screen)
-    gui-control tap 'Button[text=Save]'            tap by visible text
-    gui-control tap 240,320                        tap a window coordinate
-    gui-control long-press '#item' --duration 1500
-    gui-control swipe '#list' 240,100              drag from an item to a point
-    gui-control scroll down                        scroll the first scrollable item by 60% of its height
-    gui-control scroll down '#list'                scroll a given item
-    gui-control scroll to 'ItemDelegate[text=Row 12]'
-    gui-control type 'hello'                       type into the focused item
-    gui-control key enter                          enter, escape, backspace, delete, tab, space, arrows, home, end, back
-    gui-control get '#slider' value                read one property (JSON)
-    gui-control get '#slider'                      dump one item with its subtree and every declared property
-    gui-control set '#slider' value 42             write a property (value parsed as JSON)
-    gui-control invoke '#model' reload             call a method (at most 3 JSON arguments)
-    gui-control shot screen.png                    PNG of the window
-    gui-control wait settled                       no new frame for 300 ms
-    gui-control wait appears '#dialog' --timeout 5000
-    gui-control wait signal '#button' --signal clicked
+```text
+gui-control ping                               is the backend up; which one, its ops, window title and size
+gui-control screen                             compact item tree: types, objectNames, rects, text and values
+gui-control screen --raw                       every item with every reported property
+gui-control screen '#settingsPage'             only the subtree under a selector
+gui-control tap '#okButton'                    tap an item (waits until it is enabled and on screen)
+gui-control tap 'Button[text=Save]'            tap by visible text
+gui-control tap 240,320                        tap a window coordinate
+gui-control long-press '#item' --duration 1500
+gui-control swipe '#list' 240,100              drag from an item to a point
+gui-control scroll down                        scroll the first scrollable item by 60% of its height
+gui-control scroll down '#list'                scroll a given item
+gui-control scroll to 'ItemDelegate[text=Row 12]'
+gui-control type 'hello'                       type into the focused item
+gui-control key enter                          enter, escape, backspace, delete, tab, space, arrows, home, end, back
+gui-control get '#slider' value                read one property (JSON)
+gui-control get '#slider'                      dump one item with its subtree and every declared property
+gui-control set '#slider' value 42             write a property (value parsed as JSON)
+gui-control invoke '#model' reload             call a method (at most 3 JSON arguments)
+gui-control shot screen.png                    PNG of the window
+gui-control wait settled                       no new frame for 300 ms
+gui-control wait appears '#dialog' --timeout 5000
+gui-control wait signal '#button' --signal clicked
+```
 
 Options that apply to every verb: `--host`, `--port`, `--map <file>`, `--hidden` (also match items
 that are not visible), `--json`, and `--no-settle`. After every tap, long press, swipe or scroll the
@@ -119,10 +135,12 @@ When a target matches nothing or several items, the command exits with status 2 
 Each line reads `Type #objectName (x,y wxh) [flags]  prop=value …`. Flags are `hidden`, `disabled`,
 `opacity=` and `clip`.
 
+![An excerpt of the demo application's item tree with each item's role. Container items are left out and their children move up; ButtonPanel, a plain item without a name or content, is left out; QQuickIconLabel and QQuickMnemonicLabel repeat the button's text and are left out; StackView, Page, Label, Button and QQuickListView are kept. Below it, the real gui-control screen output for the demo application.](docs/diagrams/screen-roles.svg)
+
 ## Selectors
 
 | Form | Example | Matches |
-|---|---|---|
+| --- | --- | --- |
 | type | `Button` | items of that type |
 | objectName | `#saveButton` | items with that `objectName` |
 | both | `Button#saveButton` | type and `objectName` |
@@ -146,23 +164,29 @@ class, such as `QQuickText` or `QQuickListView`.
 An object map gives stable names to selectors, so scripts do not break when a layout changes. It is a
 JSON file named by `--map` or `GUI_CONTROL_OBJECTMAP`:
 
-    {"names": {"save": "Button[text=Save]", "volume": {"selector": "#volumeSlider", "note": "settings page"}}}
+```json
+{"names": {"save": "Button[text=Save]", "volume": {"selector": "#volumeSlider", "note": "settings page"}}}
+```
 
-    gui-control map generate                       propose a name and a unique selector for every item on screen
-    gui-control map add save 'Button[text=Save]'
-    gui-control map list
-    gui-control tap @save
+```text
+gui-control map generate                       propose a name and a unique selector for every item on screen
+gui-control map add save 'Button[text=Save]'
+gui-control map list
+gui-control tap @save
+```
 
 ## Python
 
-    from gui_control import Gui
+```python
+from gui_control import Gui
 
-    with Gui.connect(port=7801) as gui:
-        gui.tap("Button[text=Increment]")
-        assert gui.get("#counterLabel", "text") == "Clicked 1 times"
-        gui.set("#volumeSlider", "value", 30)
-        gui.wait_for("#detailsPage")
-        gui.shot("/tmp/details.png")
+with Gui.connect(port=7801) as gui:
+    gui.tap("Button[text=Increment]")
+    assert gui.get("#counterLabel", "text") == "Clicked 1 times"
+    gui.set("#volumeSlider", "value", 30)
+    gui.wait_for("#detailsPage")
+    gui.shot("/tmp/details.png")
+```
 
 `Gui` resolves targets through the object map, waits until a target is interactable, and settles after
 each action. `GuiClient` is the raw protocol, with one method per command.
@@ -176,7 +200,7 @@ Send one JSON object per line and read one JSON object per line back. Every repl
 carries `error` and, when a selector did not resolve to one item, `candidates`.
 
 | op | Request fields | Reply |
-|---|---|---|
+| --- | --- | --- |
 | `ping` | | `backend`, `ops`, `content_props`, `window`, `width`, `height`, `title` |
 | `tree` | `selector`, `depth`, `hidden`, `props`, `all_props` | `tree`, or `matches` and `count` with a selector |
 | `tap` | `selector`, or `x` and `y` | `scrolled` when the item had to be scrolled into view |
@@ -205,11 +229,13 @@ Choosing properties in `tree` and `get`:
 
 ### Nodes
 
-    {"type": "Button", "role": "button", "objectName": "save",
-     "rect": {"x": 16, "y": 42, "width": 80, "height": 24},
-     "visible": false, "enabled": false, "opacity": 0.5, "clip": true, "z": 1,
-     "props": {"text": "Save", "checked": false},
-     "children": [...], "truncatedChildren": 3}
+```json
+{"type": "Button", "role": "button", "objectName": "save",
+ "rect": {"x": 16, "y": 42, "width": 80, "height": 24},
+ "visible": false, "enabled": false, "opacity": 0.5, "clip": true, "z": 1,
+ "props": {"text": "Save", "checked": false},
+ "children": [...], "truncatedChildren": 3}
+```
 
 `type`, `role` and `rect` (window coordinates) are always present. The flags appear only when they
 differ from the default (visible, enabled, opaque, not clipping, stacking order 0). `truncatedChildren` counts the
@@ -218,7 +244,7 @@ children left out by `depth`.
 ### Roles
 
 | Role | Meaning | Qt Quick backend |
-|---|---|---|
+| --- | --- | --- |
 | `container` | layout only, carries nothing to read or touch | plain `Item`, `Rectangle`, `Loader`, `MouseArea`, `Repeater`, layouts, positioners, Qt's internal content items |
 | `page` | a screen, or a stack or pager of screens | `StackView`, `SwipeView`, `Page` |
 | `scrollable` | content that scrolls | everything based on `Flickable`, `PathView` |
@@ -232,7 +258,7 @@ children left out by `depth`.
 ## Environment variables
 
 | Variable | Read by | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | `GUI_CONTROL_PORT` | backend, client | TCP port (default 7801) |
 | `GUI_CONTROL_BIND` | backend | address the server listens on (default 127.0.0.1) |
 | `GUI_CONTROL_HOST` | client | address the client connects to (default 127.0.0.1) |
@@ -246,7 +272,9 @@ children left out by `depth`.
 
 ## Tests
 
-    cd python && python3 -m pytest
+```sh
+cd python && python3 -m pytest
+```
 
 The end-to-end tests start `examples/demo.qml` headless with the backend preloaded. They run when
 `build/libguicontrol.so` exists (or `GUI_CONTROL_LIB` names it) and a `qml` runtime from the same Qt

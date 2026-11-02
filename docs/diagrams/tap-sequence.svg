@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1340" viewBox="0 0 1200 1340" role="img" aria-labelledby="title desc">
+<title id="title">gui-control tap '#save', end to end</title>
+<desc id="desc">The client resolves the target through the object map and pings ControlServer for the window size. It then repeats get '#save' until the item is visible, enabled and inside the window, scrolling it into view when it is off-screen. It sends tap with the selector. ControlServer matches the selector, scrolls the item into view, takes its centre point and sends a mouse press and release to the QQuickWindow, where the button emits clicked(). ControlServer replies ok. The client then sends wait settled; ControlServer lets any StackView transition finish and replies once no new frame has been rendered for 300 ms, at most 8 s. The client prints tapped #save.</desc>
+<defs><style>
+text{font-family:Arial,Helvetica,sans-serif;fill:#18314f}
+.kicker{font-size:14px;font-weight:700;letter-spacing:1.4px;fill:#486080}
+.title{font-size:30px;font-weight:700}
+.subtitle{font-size:18px;fill:#526780}
+.heading{font-size:20px;font-weight:700}
+.small{font-size:16px;fill:#526780}
+.label{font-size:15px;font-weight:700;fill:#486080}
+.mono{font-size:16px;font-family:'DejaVu Sans Mono',Menlo,Consolas,monospace;fill:#18314f}
+.box{fill:#eef4ff;stroke:#9cb7d9}
+.soft{fill:#f5f7fb;stroke:#d6e0ed}
+.frame{fill:none;stroke:#9cb7d9;stroke-width:1.5}
+.life{fill:none;stroke:#9cb7d9;stroke-width:1.5;stroke-dasharray:4 6}
+.edge{fill:none;stroke:#486080;stroke-width:2;marker-end:url(#arrow)}
+.reply{stroke-dasharray:8 6}
+.tap{fill:none;stroke:#18314f;stroke-width:4;marker-end:url(#arrow-strong)}
+</style>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#486080"/></marker>
+<marker id="arrow-strong" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#18314f"/></marker>
+</defs>
+<rect width="1200" height="1340" fill="white"/>
+<text x="40" y="46" class="kicker">GUI-CONTROL · ONE TAP</text>
+<text x="40" y="90" class="title">gui-control tap '#save', end to end</text>
+<text x="40" y="124" class="subtitle">The client checks the target first and waits for the screen to settle last.</text>
+
+<g id="participants">
+<g id="client"><rect x="60" y="160" width="320" height="76" rx="10" class="box"/>
+<text x="220" y="192" class="heading" text-anchor="middle">Client</text>
+<text x="220" y="218" class="small" text-anchor="middle">gui-control CLI, Gui, GuiClient</text></g>
+<g id="control-server"><rect x="440" y="160" width="320" height="76" rx="10" class="box"/>
+<text x="600" y="192" class="heading" text-anchor="middle">ControlServer</text>
+<text x="600" y="218" class="small" text-anchor="middle">inside the app, on the GUI thread</text></g>
+<g id="window"><rect x="820" y="160" width="320" height="76" rx="10" class="box"/>
+<text x="980" y="192" class="heading" text-anchor="middle">QQuickWindow</text>
+<text x="980" y="218" class="small" text-anchor="middle">the application's scene</text></g>
+<path class="life" d="M220 236 V1250"/>
+<path class="life" d="M600 236 V1250"/>
+<path class="life" d="M980 236 V1250"/>
+</g>
+
+<g id="resolve-target">
+<rect x="80" y="262" width="280" height="44" rx="8" class="soft"/>
+<text x="220" y="290" class="small" text-anchor="middle">resolve '#save' (object map)</text>
+</g>
+
+<g id="window-size">
+<path class="edge" d="M220 350 H596"/><text x="410" y="340" class="mono" text-anchor="middle">ping</text>
+<path class="edge reply" d="M600 388 H224"/><text x="410" y="378" class="mono" text-anchor="middle">window 480 × 640</text>
+</g>
+
+<g id="wait-until-tappable">
+<rect x="40" y="414" width="760" height="196" rx="6" class="frame"/>
+<rect x="40" y="414" width="70" height="28" rx="6" class="box"/>
+<text x="75" y="433" class="label" text-anchor="middle">loop</text>
+<text x="236" y="434" class="small">until visible, enabled, on screen</text>
+<path class="edge" d="M220 476 H596"/><text x="410" y="466" class="mono" text-anchor="middle">get '#save'</text>
+<path class="edge reply" d="M600 516 H224"/><text x="410" y="506" class="mono" text-anchor="middle">rect, visible, enabled</text>
+<path class="edge" d="M220 572 H596"/><text x="410" y="562" class="mono" text-anchor="middle">scroll '#save' if off-screen</text>
+</g>
+
+<g id="tap">
+<path class="tap" d="M220 660 H594"/><text x="410" y="646" class="mono" text-anchor="middle">tap {"selector":"#save"}</text>
+<rect x="430" y="682" width="340" height="56" rx="8" class="soft"/>
+<text x="600" y="706" class="small" text-anchor="middle">match the selector, scroll it into view,</text>
+<text x="600" y="728" class="small" text-anchor="middle">take its centre point</text>
+<path class="edge" d="M600 782 H976"/><text x="790" y="772" class="mono" text-anchor="middle">MouseButtonPress (x, y)</text>
+<path class="edge" d="M600 828 H976"/><text x="790" y="818" class="mono" text-anchor="middle">MouseButtonRelease (x, y)</text>
+<rect x="840" y="852" width="280" height="44" rx="8" class="soft"/>
+<text x="980" y="880" class="small" text-anchor="middle">Button emits clicked()</text>
+<path class="edge reply" d="M600 940 H224"/><text x="410" y="930" class="mono" text-anchor="middle">{"ok": true}</text>
+</g>
+
+<g id="settle">
+<path class="edge" d="M220 996 H596"/><text x="410" y="986" class="mono" text-anchor="middle">wait settled</text>
+<path class="edge reply" d="M980 1044 H604"/><text x="790" y="1034" class="mono" text-anchor="middle">frameSwapped, per frame</text>
+<rect x="430" y="1068" width="340" height="56" rx="8" class="soft"/>
+<text x="600" y="1092" class="small" text-anchor="middle">StackView transition finished, then</text>
+<text x="600" y="1114" class="small" text-anchor="middle">no new frame for 300 ms (at most 8 s)</text>
+<path class="edge reply" d="M600 1170 H224"/><text x="410" y="1160" class="mono" text-anchor="middle">{"ok": true}</text>
+<rect x="80" y="1194" width="280" height="44" rx="8" class="soft"/>
+<text x="220" y="1222" class="small" text-anchor="middle">prints: tapped #save</text>
+</g>
+
+<text x="40" y="1290" class="small">Solid arrows: requests and input events. Dashed arrows: replies and signals. Thick arrow: the tap itself.</text>
+<text x="40" y="1314" class="small">If the UI is still animating after 8 s, the tap is still reported, marked as not settled.</text>
+</svg>

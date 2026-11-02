@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="960" viewBox="0 0 1200 960" role="img" aria-labelledby="title desc">
+<title id="title">gui-control structure: a client without Qt and a backend inside the application</title>
+<desc id="desc">The client runs in its own process: an agent or test drives the gui-control CLI, which calls Gui, which calls GuiClient. GuiClient sends one JSON line per request over TCP to ControlServer inside the application process and reads one JSON line back. ControlServer, Scene and Actions make up libguicontrol.so, the Qt Quick backend. Scene reads the application's QQuickWindow item tree to resolve selectors and assign roles; Actions sends input events to it, scrolls, grabs screenshots and waits. Another backend that answers the same protocol could serve the same client; it is not built yet.</desc>
+<defs><style>
+text{font-family:Arial,Helvetica,sans-serif;fill:#18314f}
+.kicker{font-size:14px;font-weight:700;letter-spacing:1.4px;fill:#486080}
+.title{font-size:30px;font-weight:700}
+.subtitle{font-size:18px;fill:#526780}
+.heading{font-size:20px;font-weight:700}
+.small{font-size:16px;fill:#526780}
+.label{font-size:15px;font-weight:700;fill:#486080}
+.mono{font-size:16px;font-family:'DejaVu Sans Mono',Menlo,Consolas,monospace;fill:#18314f}
+.box{fill:#eef4ff;stroke:#9cb7d9}
+.plain{fill:#ffffff;stroke:#c9d6e6}
+.soft{fill:#f5f7fb;stroke:#d6e0ed}
+.bound{fill:none;stroke:#486080;stroke-width:1.5;stroke-dasharray:8 6}
+.edge{fill:none;stroke:#486080;stroke-width:2;marker-end:url(#arrow)}
+.wire{fill:none;stroke:#18314f;stroke-width:4;marker-end:url(#arrow-strong)}
+.reply{stroke-dasharray:9 6}
+.branch{fill:none;stroke:#486080;stroke-width:2;stroke-dasharray:8 6;marker-end:url(#arrow)}
+</style>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#486080"/></marker>
+<marker id="arrow-strong" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#18314f"/></marker>
+</defs>
+<rect width="1200" height="960" fill="white"/>
+<text x="40" y="46" class="kicker">GUI-CONTROL · STRUCTURE</text>
+<text x="40" y="90" class="title">A client without Qt, a backend inside the application</text>
+<text x="40" y="124" class="subtitle">Each request is one line of JSON over TCP. Everything that knows Qt runs inside the application process.</text>
+
+<g id="client" data-bounds="40,160,1120,170">
+<rect x="40" y="160" width="1120" height="170" rx="12" class="plain"/>
+<text x="60" y="192" class="kicker">CLIENT · YOUR PROCESS · NO QT CODE</text>
+<g id="agent"><rect x="64" y="212" width="228" height="92" rx="10" class="box"/>
+<text x="84" y="248" class="heading">Agent or test</text>
+<text x="84" y="276" class="small">drives the UI by name</text></g>
+<g id="cli"><rect x="340" y="212" width="228" height="92" rx="10" class="box"/>
+<text x="360" y="248" class="heading">gui-control CLI</text>
+<text x="360" y="276" class="small">verbs and screen view</text></g>
+<g id="gui"><rect x="616" y="212" width="228" height="92" rx="10" class="box"/>
+<text x="636" y="248" class="heading">Gui (Python)</text>
+<text x="636" y="276" class="small">map, waits, settling</text></g>
+<g id="gui-client"><rect x="892" y="212" width="228" height="92" rx="10" class="box"/>
+<text x="912" y="248" class="heading">GuiClient</text>
+<text x="912" y="276" class="small">one method per op</text></g>
+<g id="client-calls">
+<path class="edge" d="M292 266 H338"/><text x="316" y="254" class="label" text-anchor="middle">runs</text>
+<path class="edge" d="M568 266 H614"/><text x="592" y="254" class="label" text-anchor="middle">calls</text>
+<path class="edge" d="M844 266 H890"/><text x="868" y="254" class="label" text-anchor="middle">calls</text>
+</g>
+</g>
+
+
+<g id="application" data-bounds="40,440,1120,300">
+<rect x="40" y="440" width="1120" height="300" rx="12" class="bound"/>
+<text x="60" y="472" class="kicker">APPLICATION PROCESS · BINARY UNCHANGED</text>
+<g id="item-tree"><rect x="64" y="540" width="400" height="160" rx="10" class="plain"/>
+<text x="84" y="578" class="heading">QQuickWindow</text>
+<text x="84" y="606" class="small">the application's own item tree</text>
+<text x="84" y="630" class="small">(its QML, rendered by Qt)</text></g>
+<g id="backend"><rect x="536" y="490" width="600" height="226" rx="10" class="soft"/>
+<text x="556" y="520" class="heading">libguicontrol.so · Qt Quick backend</text>
+<g id="scene"><rect x="556" y="540" width="260" height="72" rx="10" class="box"/>
+<text x="576" y="570" class="heading">Scene</text>
+<text x="576" y="596" class="small">tree, selectors, roles</text></g>
+<g id="actions"><rect x="556" y="628" width="260" height="72" rx="10" class="box"/>
+<text x="576" y="658" class="heading">Actions</text>
+<text x="576" y="684" class="small">input, scrolling, grabs, waits</text></g>
+<g id="control-server"><rect x="892" y="574" width="228" height="92" rx="10" class="box"/>
+<text x="912" y="608" class="heading">ControlServer</text>
+<text x="912" y="634" class="small">GUI thread</text>
+<text x="912" y="656" class="small">op → handler</text></g>
+</g>
+<g id="backend-calls">
+<path class="edge" d="M892 594 H818"/><text x="855" y="586" class="label" text-anchor="middle">resolves</text>
+<path class="edge" d="M892 646 H818"/><text x="855" y="638" class="label" text-anchor="middle">acts</text>
+<path class="edge" d="M556 576 H466"/><text x="511" y="568" class="label" text-anchor="middle">reads</text>
+<path class="edge" d="M556 664 H466"/><text x="511" y="656" class="label" text-anchor="middle">events</text>
+</g>
+</g>
+
+<g id="protocol" data-bounds="660,304,500,270">
+<path class="wire" d="M990 304 V570"/>
+<path class="wire reply" d="M1024 574 V308"/>
+<text x="972" y="362" class="kicker" text-anchor="end">THE CONTRACT</text>
+<text x="972" y="392" class="mono" text-anchor="end">{"op":"tap", …}</text>
+<text x="972" y="418" class="small" text-anchor="end">JSON lines over TCP 127.0.0.1:7801</text>
+<text x="1042" y="392" class="mono">{"ok": true}</text>
+</g>
+
+<g id="other-backend" data-bounds="536,780,624,92">
+<path class="branch" d="M1120 258 H1180 V826 H1162"/>
+<text x="1150" y="768" class="label" text-anchor="end">same requests</text>
+<rect x="536" y="780" width="624" height="92" rx="10" class="bound"/>
+<text x="556" y="814" class="heading">Another backend · not built yet</text>
+<text x="556" y="842" class="small">Qt Widgets, GTK or a browser: same ops, node format and roles</text>
+</g>
+
+<text x="40" y="910" class="small">Thick arrows: protocol requests (down, solid) and replies (up, dashed). Thin arrows: calls inside one process.</text>
+<text x="40" y="934" class="small">Dashed outlines: the application's process boundary, and a backend that does not exist yet.</text>
+</svg>

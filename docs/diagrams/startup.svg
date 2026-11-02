@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1060" viewBox="0 0 1200 1060" role="img" aria-labelledby="title desc">
+<title id="title">gui-control start-up: how the backend gets into the application</title>
+<desc id="desc">Normally gui-control-run puts libguicontrol.so first in LD_PRELOAD and execs the application. When a wrapper script starts the application and would reset the environment, gui-control-launch takes the application's place, sets LD_PRELOAD at the last moment and execs GUI_CONTROL_TARGET. Then the dynamic loader maps the application and the library, the application's own main constructs QGuiApplication, and Qt runs the library's startup function. In a GUI application ControlServer starts listening on 127.0.0.1:7801; without a QGuiApplication, or with GUI_CONTROL_ENABLED=0, the library does nothing.</desc>
+<defs><style>
+text{font-family:Arial,Helvetica,sans-serif;fill:#18314f}
+.kicker{font-size:14px;font-weight:700;letter-spacing:1.4px;fill:#486080}
+.title{font-size:30px;font-weight:700}
+.subtitle{font-size:18px;fill:#526780}
+.heading{font-size:20px;font-weight:700}
+.small{font-size:16px;fill:#526780}
+.label{font-size:15px;font-weight:700;fill:#486080}
+.mono{font-size:16px;font-family:'DejaVu Sans Mono',Menlo,Consolas,monospace;fill:#18314f}
+.box{fill:#eef4ff;stroke:#9cb7d9}
+.alt{fill:#fff8eb;stroke:#9cb7d9}
+.edge{fill:none;stroke:#486080;stroke-width:2;marker-end:url(#arrow)}
+</style>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#486080"/></marker>
+</defs>
+<rect width="1200" height="1060" fill="white"/>
+<text x="40" y="46" class="kicker">GUI-CONTROL · START-UP</text>
+<text x="40" y="90" class="title">How the backend gets into the application</text>
+<text x="40" y="124" class="subtitle">Nothing is rebuilt: LD_PRELOAD brings the library in, and Qt itself starts the server.</text>
+
+<g id="normal-start" data-bounds="40,170,520,130">
+<rect x="40" y="170" width="520" height="130" rx="10" class="box"/>
+<text x="60" y="204" class="heading">Normal start</text>
+<text x="60" y="236" class="mono">gui-control-run ./app</text>
+<text x="60" y="266" class="small">puts libguicontrol.so first in LD_PRELOAD,</text>
+<text x="60" y="288" class="small">then execs ./app</text>
+</g>
+<g id="wrapper-start" data-bounds="640,170,520,130">
+<rect x="640" y="170" width="520" height="130" rx="10" class="alt"/>
+<text x="660" y="204" class="heading">Started by a wrapper script</text>
+<text x="660" y="236" class="mono">gui-control-launch, in place of ./app</text>
+<text x="660" y="266" class="small">sets LD_PRELOAD at the last moment,</text>
+<text x="660" y="288" class="small">then execs $GUI_CONTROL_TARGET</text>
+</g>
+<g id="entry-edges">
+<path class="edge" d="M360 300 V378"/><text x="372" y="346" class="label">exec ./app</text>
+<path class="edge" d="M840 300 V378"/><text x="852" y="346" class="label">exec the target</text>
+</g>
+
+<g id="loader" data-bounds="300,380,560,90">
+<rect x="300" y="380" width="560" height="90" rx="10" class="box"/>
+<text x="320" y="414" class="heading">1. The dynamic loader starts the process</text>
+<text x="320" y="446" class="small">maps ./app and libguicontrol.so together with their Qt libraries</text>
+</g>
+<path class="edge" d="M580 470 V538"/><text x="592" y="510" class="label">runs main()</text>
+
+<g id="application-start" data-bounds="300,540,560,90">
+<rect x="300" y="540" width="560" height="90" rx="10" class="box"/>
+<text x="320" y="574" class="heading">2. The application constructs QGuiApplication</text>
+<text x="320" y="606" class="small">its own main(), unchanged</text>
+</g>
+<path class="edge" d="M580 630 V698"/><text x="592" y="670" class="label">Qt starts up</text>
+
+<g id="startup-function" data-bounds="300,700,560,90">
+<rect x="300" y="700" width="560" height="90" rx="10" class="box"/>
+<text x="320" y="734" class="heading">3. Qt runs the library's startup function</text>
+<text x="320" y="766" class="mono">Q_COREAPP_STARTUP_FUNCTION in Hook.cpp</text>
+</g>
+<g id="stays-idle" data-bounds="890,700,270,90">
+<path class="edge" d="M860 745 H888"/>
+<rect x="890" y="700" width="270" height="90" rx="10" class="alt"/>
+<text x="910" y="732" class="heading">Does nothing</text>
+<text x="910" y="758" class="small">no QGuiApplication,</text>
+<text x="910" y="780" class="small">or GUI_CONTROL_ENABLED=0</text>
+</g>
+<path class="edge" d="M580 790 V858"/><text x="592" y="830" class="label">a GUI application</text>
+
+<g id="listening" data-bounds="300,860,560,124">
+<rect x="300" y="860" width="560" height="124" rx="10" class="box"/>
+<text x="320" y="894" class="heading">4. ControlServer listens</text>
+<text x="320" y="924" class="mono">127.0.0.1:7801</text>
+<text x="320" y="950" class="small">address from GUI_CONTROL_BIND and GUI_CONTROL_PORT</text>
+<text x="320" y="974" class="small">logs: [gui-control] listening on 127.0.0.1:7801</text>
+</g>
+
+<text x="40" y="1024" class="small">Arrows follow start-up in time. Boxes on the right are the alternative paths: a wrapper start, and the library staying idle.</text>
+</svg>
