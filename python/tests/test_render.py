@@ -1,8 +1,10 @@
-from gui_control.render import render, render_candidates, render_compact, render_compact_tree
+from gui_control.render import render_candidates, render_compact_tree, render_tree
+
+CONTENT = ("text", "placeholderText", "checked", "title")
 
 
-def _node(node_type, children=(), object_name=None, props=None, **extra):
-    node = {"type": node_type, "rect": {"x": 1, "y": 2, "width": 3, "height": 4}}
+def _node(node_type, children=(), role="item", object_name=None, props=None, **extra):
+    node = {"type": node_type, "role": role, "rect": {"x": 1, "y": 2, "width": 3, "height": 4}}
     if object_name:
         node["objectName"] = object_name
     if props:
@@ -12,84 +14,84 @@ def _node(node_type, children=(), object_name=None, props=None, **extra):
     return node
 
 
-def _page_tree():
-    label = _node("Label", props={"text": "Overview", "color": "#fff"})
-    button = _node(
-        "Button",
-        [_node("QQuickRectangle", props={"color": "#000"})],
-        object_name="okButton",
-        props={"text": "OK"},
-    )
-    layout = _node("QQuickColumnLayout", [_node("QQuickItem", [button, label])])
-    return _node("QQuickRootItem", [_node("SettingsView", [layout])])
+def _compact(tree, keep_types=frozenset()):
+    return render_compact_tree(tree, CONTENT, keep_types)
 
 
-def test_compact_promotes_kept_descendants_to_nearest_kept_ancestor():
-    assert render_compact(_page_tree()) == [
+def test_containers_disappear_and_their_children_move_up():
+    label = _node("Label", role="text", props={"text": "Overview", "color": "#fff"})
+    button = _node("Button", [_node("Rect", role="container")], role="button", object_name="ok", props={"text": "OK"})
+    layout = _node("Column", [_node("Item", [button, label], role="container")], role="container", object_name="column")
+    tree = _node("Root", [_node("SettingsView", [layout])], role="container")
+    assert _compact(tree) == [
         "SettingsView (1,2 3x4)",
-        '  Button #okButton (1,2 3x4)  text="OK"',
+        '  Button #ok (1,2 3x4)  text="OK"',
         '  Label (1,2 3x4)  text="Overview"',
     ]
 
 
-def test_compact_keeps_flags_truncation_and_long_text():
+def test_every_role_other_than_container_and_item_is_shown():
+    tree = _node("Root", [_node("List", role="scrollable"), _node("Picture", role="image"), _node("Sheet", role="popup")], role="container")
+    assert _compact(tree) == ["List (1,2 3x4)", "Picture (1,2 3x4)", "Sheet (1,2 3x4)"]
+
+
+def test_plain_items_need_a_name_content_or_view_suffix():
     tree = _node(
-        "MainView",
-        [_node("QQuickItem", [_node("QQuickText", props={"text": "x" * 60})], truncatedChildren=3)],
-        visible=False,
-        enabled=False,
+        "Root",
+        [_node("Gauge"), _node("Gauge", object_name="speed"), _node("Gauge", props={"checked": True}), _node("MainView")],
+        role="container",
     )
-    lines = render_compact(tree)
-    assert lines[0] == "MainView (1,2 3x4) [hidden, disabled]"
-    assert lines[1] == "  … 3 more child items"
-    assert lines[2] == f'  QQuickText (1,2 3x4)  text="{"x" * 47}…"'
+    assert _compact(tree) == ["Gauge #speed (1,2 3x4)", "Gauge (1,2 3x4)  checked=true", "MainView (1,2 3x4)"]
 
 
-def test_compact_keeps_nodes_by_content_props_and_popup_markers():
-    tree = _node(
-        "QQuickItem",
-        [_node("QQuickItem", props={"checked": True}), _node("QQuickPopupItem"), _node("QQuickRepeater")],
-    )
-    assert render_compact(tree) == ["QQuickItem (1,2 3x4)  checked=true", "QQuickPopupItem (1,2 3x4)"]
+def test_container_with_content_is_shown():
+    assert _compact(_node("Item", role="container", props={"checked": True})) == ["Item (1,2 3x4)  checked=true"]
 
 
-def test_object_name_on_generic_container_does_not_keep_it():
-    tree = _node("QQuickRowLayout", [_node("Label", props={"text": "a"})], object_name="row")
-    assert render_compact(tree) == ['Label (1,2 3x4)  text="a"']
+def test_keep_types_adds_application_widgets():
+    tree = _node("Root", [_node("Gauge")], role="container")
+    assert _compact(tree) == []
+    assert _compact(tree, frozenset({"Gauge"})) == ["Gauge (1,2 3x4)"]
+
+
+def test_only_backend_content_props_are_shown():
+    node = _node("Label", role="text", props={"text": "a", "color": "#000", "wrap": True})
+    assert render_compact_tree(node, ("text",)) == ['Label (1,2 3x4)  text="a"']
+    assert render_compact_tree(node) == ["Label (1,2 3x4)"]
 
 
 def test_items_repeating_the_text_of_their_owner_are_left_out():
-    tree = _node(
+    button = _node(
         "Button",
-        [_node("QQuickIconLabel", [_node("QQuickMnemonicLabel", object_name="label", props={"text": "OK"})], props={"text": "OK"})],
-        object_name="okButton",
+        [_node("IconLabel", [_node("Text", role="text", object_name="label", props={"text": "OK"})], props={"text": "OK"})],
+        role="button",
+        object_name="ok",
         props={"text": "OK", "checked": False},
     )
-    field = _node("TextField", [_node("QQuickPlaceholderText", props={"text": "Name"})], props={"placeholderText": "Name"})
-    assert render_compact_tree([tree, field]) == [
-        'Button #okButton (1,2 3x4)  text="OK" checked=false',
+    field = _node("TextField", [_node("Placeholder", role="text", props={"text": "Name"})], role="input", props={"placeholderText": "Name"})
+    assert _compact([button, field]) == [
+        'Button #ok (1,2 3x4)  text="OK" checked=false',
         'TextField (1,2 3x4)  placeholderText="Name"',
     ]
 
 
-def test_qt_internal_containers_with_object_names_are_left_out():
-    tree = _node("QQuickRootItem", [_node("QQuickContentItem", [_node("Label", props={"text": "a"})], object_name="Page")], object_name="ApplicationWindow")
-    assert render_compact(tree) == ['Label (1,2 3x4)  text="a"']
-
-
-def test_keep_types_adds_application_widgets():
-    tree = _node("QQuickItem", [_node("Gauge")])
-    assert render_compact_tree(tree) == []
-    assert render_compact_tree(tree, frozenset({"Gauge"})) == ["Gauge (1,2 3x4)"]
-
-
-def test_compact_tree_handles_match_lists():
-    assert render_compact_tree([_node("QQuickListView"), _node("QQuickItem")]) == ["QQuickListView (1,2 3x4)"]
+def test_flags_truncation_and_long_text():
+    tree = _node(
+        "MainView",
+        [_node("Item", [_node("Text", role="text", props={"text": "x" * 60})], role="container", truncatedChildren=3)],
+        visible=False,
+        enabled=False,
+    )
+    assert _compact(tree) == [
+        "MainView (1,2 3x4) [hidden, disabled]",
+        "  … 3 more child items",
+        f'  Text (1,2 3x4)  text="{"x" * 47}…"',
+    ]
 
 
 def test_raw_render_shows_every_item_and_prop():
-    assert render(_node("QQuickItem", [_node("Rect", props={"color": "#000"})])) == [
-        "QQuickItem (1,2 3x4)",
+    assert render_tree([_node("Item", [_node("Rect", props={"color": "#000"})], role="container")]) == [
+        "Item (1,2 3x4)",
         '  Rect (1,2 3x4)  color="#000"',
     ]
 

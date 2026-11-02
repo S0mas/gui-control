@@ -27,7 +27,7 @@ def value_of(text):
 
 def window_line(window):
     if not window.get("window"):
-        return "no QQuickWindow yet"
+        return "no window yet"
     return f"window '{window.get('title', '')}' {window.get('width')}x{window.get('height')}"
 
 
@@ -41,12 +41,15 @@ def outcome_line(verb, target, outcome):
 
 
 def cmd_ping(args, gui):
-    print(f"hook up on {gui.client.host}:{gui.client.port}, {window_line(gui.window())}")
+    window = gui.window()
+    backend = window.get("backend", "unknown backend")
+    print(f"hook up on {gui.client.host}:{gui.client.port}, {backend}, {window_line(window)}")
+    print(f"ops: {' '.join(window.get('ops', []))}")
     return 0
 
 
 def cmd_screen(args, gui):
-    props = "all" if args.all_props else (args.props.split(",") if args.props else None)
+    props = args.props.split(",") if args.props else None
     tree = gui.screen(args.target, depth=args.depth, props=props, hidden=args.hidden, all_props=args.all_props)
     if args.json:
         print(json.dumps(tree, indent=2))
@@ -54,9 +57,13 @@ def cmd_screen(args, gui):
     if isinstance(tree, list) and not tree:
         print("no matches")
         return 1
-    print(window_line(gui.window()))
+    window = gui.window()
+    print(window_line(window))
     keep = render.keep_types_from_environment() | frozenset(args.keep.split(",") if args.keep else ())
-    lines = render.render_tree(tree) if args.raw else render.render_compact_tree(tree, keep)
+    if args.raw:
+        lines = render.render_tree(tree)
+    else:
+        lines = render.render_compact_tree(tree, window.get("content_props", ()), keep)
     print("\n".join(lines))
     return 0
 
@@ -87,7 +94,7 @@ def cmd_scroll(args, gui):
         print(f"{args.target} {state} at {rect.get('x', 0):.0f},{rect.get('y', 0):.0f}")
         return 0
     outcome = gui.scroll(args.direction, args.target, hidden=args.hidden)
-    print(outcome_line("scrolled", f"{args.direction} in {args.target or 'QQuickListView'}", outcome))
+    print(outcome_line("scrolled", f"{args.direction} in {args.target or 'the first scrollable item'}", outcome))
     return 0
 
 
@@ -108,7 +115,7 @@ def cmd_get(args, gui):
     if args.prop or args.json:
         print(json.dumps(result, indent=None if args.prop else 2))
     else:
-        print("\n".join(render.render(result)))
+        print("\n".join(render.render_tree(result)))
     return 0
 
 
@@ -191,7 +198,7 @@ def common_parser(suppress):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="gui-control",
-        description="Drive and inspect a running Qt Quick application that has libguicontrol.so loaded.",
+        description="Drive and inspect a running GUI application through its gui-control backend.",
         parents=[common_parser(False)],
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="<verb>")
@@ -209,7 +216,7 @@ def build_parser():
     screen.add_argument("--depth", type=int, default=None)
     screen.add_argument("--raw", action="store_true", help="every item with geometry and flags")
     screen.add_argument("--props", help="comma separated property whitelist")
-    screen.add_argument("--all-props", action="store_true", help="include the properties every QQuickItem has")
+    screen.add_argument("--all-props", action="store_true", help="every property, including the ones every item has")
     screen.add_argument("--keep", help="comma separated extra item types the compact view always shows")
 
     for name, func, help_text in (
@@ -228,7 +235,7 @@ def build_parser():
 
     scroll = verb("scroll", cmd_scroll, "scroll a list: down|up [container], or `to <target>` to bring an item into view")
     scroll.add_argument("direction", choices=["down", "up", "to"])
-    scroll.add_argument("target", nargs="?", help="container to scroll (default QQuickListView), or the item for `to`")
+    scroll.add_argument("target", nargs="?", help="container to scroll (default: the first scrollable item), or the item for `to`")
 
     verb("type", cmd_type, "type text into the focused item").add_argument("text")
     verb("key", cmd_key, "press a named key (enter, escape, backspace, tab, up, down, ...)").add_argument("name")
@@ -290,10 +297,13 @@ def report_target_failure(status, error, gui):
     if error.candidates:
         print("\n".join(render.render_candidates(error.candidates)), file=sys.stderr)
     try:
-        print(window_line(gui.window()), file=sys.stderr)
-        print("\n".join(render.render_compact_tree(gui.screen(), render.keep_types_from_environment())), file=sys.stderr)
+        window = gui.window()
+        tree = gui.screen()
     except (ControlError, OSError):
         return
+    print(window_line(window), file=sys.stderr)
+    content_props = window.get("content_props", ())
+    print("\n".join(render.render_compact_tree(tree, content_props, render.keep_types_from_environment())), file=sys.stderr)
 
 
 def run(args, gui):

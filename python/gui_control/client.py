@@ -9,26 +9,7 @@ HOST_VARIABLE = "GUI_CONTROL_HOST"
 PORT_VARIABLE = "GUI_CONTROL_PORT"
 SHOT_DIR_VARIABLE = "GUI_CONTROL_SHOT_DIR"
 
-DEFAULT_PROPS = [
-    "text",
-    "displayText",
-    "placeholderText",
-    "value",
-    "from",
-    "to",
-    "stepSize",
-    "currentIndex",
-    "currentValue",
-    "name",
-    "source",
-    "color",
-    "checked",
-    "selected",
-    "readOnly",
-    "wrap",
-    "title",
-    "label",
-]
+DECLARED_PROPS = "*"
 
 
 class ControlError(RuntimeError):
@@ -76,7 +57,7 @@ class GuiClient:
         except OSError as error:
             raise ControlError(
                 f"gui-control hook not reachable on {self.host}:{self.port} ({error}). "
-                "Is the application running with libguicontrol.so preloaded?"
+                "Is the application running with its gui-control backend loaded?"
             ) from error
 
     def wait_ready(self, timeout=60.0, interval=0.2):
@@ -88,7 +69,7 @@ class GuiClient:
                 answer = self.ping()
                 if answer.get("window"):
                     return answer
-                last = "no QQuickWindow yet"
+                last = "no window yet"
             except (ControlError, OSError) as error:
                 last = error
                 self.close()
@@ -140,9 +121,7 @@ class GuiClient:
             payload["selector"] = selector
         if depth is not None:
             payload["depth"] = depth
-        if props is None:
-            props = DEFAULT_PROPS
-        if props != "all":
+        if props is not None:
             payload["props"] = props
         response = self.request("tree", **payload)
         return response.get("tree") if "tree" in response else response.get("matches")
@@ -166,6 +145,8 @@ class GuiClient:
         payload = {"selector": selector, "hidden": hidden}
         if prop:
             payload["prop"] = prop
+        else:
+            payload["props"] = DECLARED_PROPS
         response = self.request("get", **payload)
         return response.get("value", response.get("item"))
 

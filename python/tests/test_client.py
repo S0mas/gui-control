@@ -1,14 +1,14 @@
 import pytest
 
 from fake_hook import FakeHook
-from gui_control.client import DEFAULT_PROPS, ControlError, GuiClient, screenshot_path
+from gui_control.client import ControlError, GuiClient, screenshot_path
 
 
 def _answer(request):
     if request["op"] == "get":
         return {"ok": False, "error": f"selector '{request['selector']}' matched nothing", "candidates": [{"type": "Button"}]}
     if request["op"] == "tree":
-        return {"ok": True, "tree": {"type": "QQuickRootItem"}}
+        return {"ok": True, "tree": {"type": "Root"}}
     return {"ok": True, "echo": request}
 
 
@@ -24,12 +24,20 @@ def test_request_sends_op_and_payload_as_one_json_line():
     ]
 
 
-def test_tree_sends_default_prop_whitelist_unless_all():
+def test_tree_leaves_the_property_choice_to_the_backend_unless_asked():
     with FakeHook(_answer) as hook, GuiClient(port=hook.port) as client:
-        assert client.tree() == {"type": "QQuickRootItem"}
-        client.tree(props="all", all_props=True)
-    assert hook.requests[0]["props"] == DEFAULT_PROPS
-    assert "props" not in hook.requests[1]
+        assert client.tree() == {"type": "Root"}
+        client.tree(props=["text"])
+        client.tree(all_props=True)
+    assert "props" not in hook.requests[0]
+    assert hook.requests[1]["props"] == ["text"]
+    assert hook.requests[2]["all_props"] is True
+
+
+def test_get_without_prop_asks_for_every_declared_property():
+    with FakeHook(lambda request: {"ok": True, "item": {"type": "Button"}}) as hook, GuiClient(port=hook.port) as client:
+        assert client.get("#ok") == {"type": "Button"}
+    assert hook.requests[0]["props"] == "*"
 
 
 def test_hook_failure_raises_with_candidates_and_response():

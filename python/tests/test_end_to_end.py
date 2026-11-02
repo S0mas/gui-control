@@ -55,6 +55,30 @@ def test_window_is_reported(gui):
     assert (window["width"], window["height"], window["title"]) == (480, 640, "gui-control demo")
 
 
+def test_ping_reports_the_backend_its_ops_and_content_props(gui):
+    window = gui.window()
+    assert window["backend"] == "qtquick"
+    assert {"tap", "tree", "screenshot", "wait"} <= set(window["ops"])
+    assert "text" in window["content_props"]
+
+
+def test_items_carry_roles(gui):
+    roles = {target: gui.get(target)["role"] for target in ("incrementButton", "counterLabel", "nameField", "darkSwitch", "fruitList", "homePage")}
+    assert roles == {
+        "incrementButton": "button",
+        "counterLabel": "text",
+        "nameField": "input",
+        "darkSwitch": "button",
+        "fruitList": "scrollable",
+        "homePage": "page",
+    }
+
+
+def test_role_selects_items(gui):
+    assert gui.get("[role=scrollable][0]", "objectName") == "fruitList"
+    assert gui.get("[role=input]", "objectName") == "nameField"
+
+
 def test_tap_clicks_a_button(gui):
     before = gui.get("counterLabel", "count")
     outcome = gui.tap("Button[text=Increment]")
@@ -95,9 +119,9 @@ def test_tap_scrolls_a_list_item_into_view(gui):
     assert outcome.scrolled
 
 
-def test_scroll_down_moves_the_list(gui):
+def test_scroll_down_moves_the_first_scrollable_item(gui):
     gui.set("fruitList", "contentY", 0)
-    gui.scroll("down", "fruitList")
+    gui.scroll("down")
     assert gui.get("fruitList", "contentY") > 0
 
 

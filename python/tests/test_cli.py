@@ -3,15 +3,26 @@ from gui_control import cli
 from gui_control.client import ControlError
 
 TREE = {
-    "type": "QQuickRootItem",
+    "type": "Root",
+    "role": "container",
     "rect": {"x": 0, "y": 0, "width": 400, "height": 300},
-    "children": [{"type": "Button", "objectName": "okButton", "rect": {}, "props": {"text": "OK"}}],
+    "children": [{"type": "Button", "role": "button", "objectName": "okButton", "rect": {}, "props": {"text": "OK", "color": "#000"}}],
+}
+PING = {
+    "ok": True,
+    "backend": "fake",
+    "ops": ["ping", "tree"],
+    "content_props": ["text"],
+    "window": True,
+    "width": 400,
+    "height": 300,
+    "title": "Demo",
 }
 
 
 def _answer(request):
     if request["op"] == "ping":
-        return {"ok": True, "window": True, "width": 400, "height": 300, "title": "Demo"}
+        return PING
     if request["op"] == "tree":
         return {"ok": True, "tree": TREE}
     if request["op"] == "get":
@@ -33,6 +44,14 @@ def test_screen_prints_window_line_and_compact_tree(capsys):
         "window 'Demo' 400x300",
         'Button #okButton (0,0 0x0)  text="OK"',
     ]
+
+
+def test_ping_names_the_backend_and_its_ops(capsys):
+    with FakeHook(_answer) as hook:
+        assert cli.main(["--port", str(hook.port), "ping"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].endswith(", fake, window 'Demo' 400x300")
+    assert out[1] == "ops: ping tree"
 
 
 def test_ambiguous_target_reports_status_candidates_and_screen(capsys):

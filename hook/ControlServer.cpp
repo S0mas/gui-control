@@ -1,6 +1,7 @@
 #include "ControlServer.hpp"
 
 #include <QGenericArgument>
+#include <QHash>
 #include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -19,6 +20,11 @@ namespace
 {
 
 constexpr int DefaultTimeoutMs = 5000;
+constexpr int MaxInvokeArguments = 3;
+const QString BackendName = QStringLiteral("qtquick");
+const QString DeclaredPropertiesMarker = QStringLiteral("*");
+
+using Handler = QJsonObject (*)(const QJsonObject&);
 
 QJsonObject failure(const QString& message, const QJsonArray& candidates = {})
 {
@@ -49,11 +55,24 @@ scene::TreeOptions treeOptions(const QJsonObject& request)
     scene::TreeOptions options;
     options.maxDepth = request.value("depth").toInt(-1);
     options.includeHidden = request.value("hidden").toBool(false);
-    options.allProps = request.value("all_props").toBool(false);
-    const QJsonArray props = request.value("props").toArray();
-    for (const QJsonValue& value : props)
+
+    const QJsonValue props = request.value("props");
+    if (request.value("all_props").toBool(false))
     {
-        options.props.push_back(value.toString());
+        options.selection = scene::PropertySelection::Every;
+    }
+    else if (props.isArray())
+    {
+        options.selection = scene::PropertySelection::Listed;
+        const QJsonArray names = props.toArray();
+        for (const QJsonValue& name : names)
+        {
+            options.props.push_back(name.toString());
+        }
+    }
+    else if (props.toString() == DeclaredPropertiesMarker)
+    {
+        options.selection = scene::PropertySelection::Declared;
     }
     return options;
 }
@@ -114,6 +133,288 @@ QQuickItem* resolveItem(const QJsonObject& request, QJsonObject& error)
         error = failure(message, candidates);
     }
     return item;
+}
+
+QJsonObject handlePing(const QJsonObject& request);
+
+QJsonObject handleTree(const QJsonObject& request)
+{
+    QQuickWindow* window = scene::window();
+    if (!window)
+    {
+        return failure("no QQuickWindow available yet");
+    }
+
+    const scene::TreeOptions options = treeOptions(request);
+    const QString selector = request.value("selector").toString();
+    if (selector.isEmpty())
+    {
+        return QJsonObject {{"ok", true}, {"tree", scene::itemToJson(window->contentItem(), options)}};
+    }
+
+    QString error;
+    auto parsed = scene::Selector::parse(selector, error);
+    if (!parsed)
+    {
+        return failure(error);
+    }
+    parsed->includeHidden = options.includeHidden;
+
+    QJsonArray matches;
+    const auto items = scene::match(*parsed);
+    for (const QQuickItem* item : items)
+    {
+        matches.append(scene::itemToJson(item, options));
+    }
+    return QJsonObject {{"ok", true}, {"matches", matches}, {"count", matches.size()}};
+}
+
+QJsonObject handleTap(const QJsonObject& request)
+{
+    QPointF point;
+    QJsonObject error;
+    bool scrolled = false;
+    if (!resolvePoint(request, point, error, scrolled))
+    {
+        return error;
+    }
+    return withScrolled(fromResult(actions::tap(point)), scrolled);
+}
+
+QJsonObject handleLongPress(const QJsonObject& request)
+{
+    QPointF point;
+    QJsonObject error;
+    bool scrolled = false;
+    if (!resolvePoint(request, point, error, scrolled))
+    {
+        return error;
+    }
+    return withScrolled(fromResult(actions::longPress(point, request.value("duration").toInt(0))), scrolled);
+}
+
+QJsonObject handleScroll(const QJsonObject& request)
+{
+    QJsonObject error;
+    QQuickItem* item = resolveItem(request, error);
+    if (!item)
+    {
+        return error;
+    }
+    const bool scrolled = actions::scrollIntoView(item);
+    const QRectF rect = scene::sceneRect(item);
+    return QJsonObject {{"ok", true}, {"scrolled", scrolled},
+        {"rect", QJsonObject {{"x", rect.x()}, {"y", rect.y()}, {"width", rect.width()}, {"height", rect.height()}}}};
+}
+
+QJsonObject handleSwipe(const QJsonObject& request)
+{
+    QPointF from;
+    QJsonObject error;
+    bool scrolled = false;
+    if (!resolvePoint(request, from, error, scrolled))
+    {
+        return error;
+    }
+
+    if (!request.contains("to_x") || !request.contains("to_y"))
+    {
+        return failure("'to_x' and 'to_y' are required");
+    }
+    const QPointF to(request.value("to_x").toDouble(), request.value("to_y").toDouble());
+    return withScrolled(fromResult(actions::swipe(from, to, request.value("duration").toInt(0))), scrolled);
+}
+
+QJsonObject handleType(const QJsonObject& request)
+{
+    return fromResult(actions::typeText(request.value("text").toString()));
+}
+
+QJsonObject handleKey(const QJsonObject& request)
+{
+    return fromResult(actions::pressKey(request.value("key").toString()));
+}
+
+QJsonObject handleGet(const QJsonObject& request)
+{
+    QJsonObject error;
+    QQuickItem* item = resolveItem(request, error);
+    if (!item)
+    {
+        return error;
+    }
+
+    const QString name = request.value("prop").toString();
+    if (name.isEmpty())
+    {
+        return QJsonObject {{"ok", true}, {"item", scene::itemToJson(item, treeOptions(request))}};
+    }
+
+    const QVariant value = item->property(name.toUtf8().constData());
+    if (!value.isValid())
+    {
+        return failure(QStringLiteral("no property '%1' on %2").arg(name, scene::itemType(item)));
+    }
+    return QJsonObject {{"ok", true}, {"value", scene::variantToJson(value)}};
+}
+
+QJsonObject handleSet(const QJsonObject& request)
+{
+    QJsonObject error;
+    QQuickItem* item = resolveItem(request, error);
+    if (!item)
+    {
+        return error;
+    }
+
+    const QString name = request.value("prop").toString();
+    if (name.isEmpty())
+    {
+        return failure("'prop' is required");
+    }
+    if (!item->setProperty(name.toUtf8().constData(), request.value("value").toVariant()))
+    {
+        return failure(QStringLiteral("could not set '%1' on %2").arg(name, scene::itemType(item)));
+    }
+    return QJsonObject {{"ok", true}};
+}
+
+QJsonObject handleInvoke(const QJsonObject& request)
+{
+    QJsonObject error;
+    QQuickItem* item = resolveItem(request, error);
+    if (!item)
+    {
+        return error;
+    }
+
+    const QString method = request.value("method").toString();
+    if (method.isEmpty())
+    {
+        return failure("'method' is required");
+    }
+
+    const QJsonArray args = request.value("args").toArray();
+    if (args.size() > MaxInvokeArguments)
+    {
+        return failure(QStringLiteral("at most %1 arguments are supported").arg(MaxInvokeArguments));
+    }
+
+    QVariant returned;
+    QVariant a0 = args.size() > 0 ? args.at(0).toVariant() : QVariant();
+    QVariant a1 = args.size() > 1 ? args.at(1).toVariant() : QVariant();
+    QVariant a2 = args.size() > 2 ? args.at(2).toVariant() : QVariant();
+
+    bool invoked = false;
+    switch (args.size())
+    {
+    case 0:
+        invoked = QMetaObject::invokeMethod(
+            item, method.toUtf8().constData(), Qt::DirectConnection, Q_RETURN_ARG(QVariant, returned));
+        break;
+    case 1:
+        invoked = QMetaObject::invokeMethod(item, method.toUtf8().constData(), Qt::DirectConnection,
+            Q_RETURN_ARG(QVariant, returned), Q_ARG(QVariant, a0));
+        break;
+    case 2:
+        invoked = QMetaObject::invokeMethod(item, method.toUtf8().constData(), Qt::DirectConnection,
+            Q_RETURN_ARG(QVariant, returned), Q_ARG(QVariant, a0), Q_ARG(QVariant, a1));
+        break;
+    default:
+        invoked = QMetaObject::invokeMethod(item, method.toUtf8().constData(), Qt::DirectConnection,
+            Q_RETURN_ARG(QVariant, returned), Q_ARG(QVariant, a0), Q_ARG(QVariant, a1), Q_ARG(QVariant, a2));
+        break;
+    }
+
+    if (!invoked)
+    {
+        return failure(QStringLiteral("could not invoke '%1' on %2").arg(method, scene::itemType(item)));
+    }
+    return QJsonObject {{"ok", true}, {"result", scene::variantToJson(returned)}};
+}
+
+QJsonObject handleScreenshot(const QJsonObject& request)
+{
+    const QString path = request.value("path").toString();
+    if (path.isEmpty())
+    {
+        return failure("'path' is required");
+    }
+    const auto result = actions::screenshot(path);
+    if (!result.ok)
+    {
+        return failure(result.error);
+    }
+    return QJsonObject {{"ok", true}, {"path", path}};
+}
+
+QJsonObject handleWait(const QJsonObject& request)
+{
+    const QString mode = request.value("mode").toString("settled");
+    const int timeout = request.value("timeout").toInt(DefaultTimeoutMs);
+    const bool hidden = request.value("hidden").toBool(false);
+
+    if (mode == "settled")
+    {
+        return fromResult(actions::waitSettled(request.value("quiet").toInt(300), timeout));
+    }
+    if (mode == "transition")
+    {
+        return fromResult(actions::waitTransitionDone(timeout));
+    }
+    if (mode == "appears" || mode == "disappears")
+    {
+        return fromResult(
+            actions::waitSelector(request.value("selector").toString(), mode == "appears", hidden, timeout));
+    }
+    if (mode == "signal")
+    {
+        return fromResult(actions::waitSignal(
+            request.value("selector").toString(), request.value("signal").toString(), hidden, timeout));
+    }
+    return failure(QStringLiteral("unknown wait mode '%1'").arg(mode));
+}
+
+const QHash<QString, Handler>& handlers()
+{
+    static const QHash<QString, Handler> table {
+        {QStringLiteral("ping"), &handlePing},
+        {QStringLiteral("tree"), &handleTree},
+        {QStringLiteral("tap"), &handleTap},
+        {QStringLiteral("long_press"), &handleLongPress},
+        {QStringLiteral("scroll"), &handleScroll},
+        {QStringLiteral("swipe"), &handleSwipe},
+        {QStringLiteral("type"), &handleType},
+        {QStringLiteral("key"), &handleKey},
+        {QStringLiteral("get"), &handleGet},
+        {QStringLiteral("set"), &handleSet},
+        {QStringLiteral("invoke"), &handleInvoke},
+        {QStringLiteral("screenshot"), &handleScreenshot},
+        {QStringLiteral("wait"), &handleWait},
+    };
+    return table;
+}
+
+QJsonObject handlePing(const QJsonObject&)
+{
+    QStringList ops = handlers().keys();
+    ops.sort();
+
+    QQuickWindow* window = scene::window();
+    QJsonObject response {
+        {"ok", true},
+        {"backend", BackendName},
+        {"ops", QJsonArray::fromStringList(ops)},
+        {"content_props", QJsonArray::fromStringList(scene::contentProperties())},
+        {"window", window != nullptr},
+    };
+    if (window)
+    {
+        response["width"] = window->width();
+        response["height"] = window->height();
+        response["title"] = window->title();
+    }
+    return response;
 }
 
 } // namespace
@@ -214,251 +515,12 @@ void ControlServer::onReadyRead(QTcpSocket* socket)
 QJsonObject ControlServer::dispatch(const QJsonObject& request)
 {
     const QString op = request.value("op").toString();
-
-    if (op == "ping")
+    const auto handler = handlers().constFind(op);
+    if (handler == handlers().constEnd())
     {
-        QQuickWindow* window = scene::window();
-        QJsonObject response {{"ok", true}, {"window", window != nullptr}};
-        if (window)
-        {
-            response["width"] = window->width();
-            response["height"] = window->height();
-            response["title"] = window->title();
-        }
-        return response;
+        return failure(QStringLiteral("unknown op '%1'").arg(op));
     }
-
-    if (op == "tree")
-    {
-        QQuickWindow* window = scene::window();
-        if (!window)
-        {
-            return failure("no QQuickWindow available yet");
-        }
-
-        const scene::TreeOptions options = treeOptions(request);
-        const QString selector = request.value("selector").toString();
-        if (selector.isEmpty())
-        {
-            return QJsonObject {{"ok", true}, {"tree", scene::itemToJson(window->contentItem(), options)}};
-        }
-
-        QString error;
-        auto parsed = scene::Selector::parse(selector, error);
-        if (!parsed)
-        {
-            return failure(error);
-        }
-        parsed->includeHidden = options.includeHidden;
-
-        QJsonArray matches;
-        const auto items = scene::match(*parsed);
-        for (const QQuickItem* item : items)
-        {
-            matches.append(scene::itemToJson(item, options));
-        }
-        return QJsonObject {{"ok", true}, {"matches", matches}, {"count", matches.size()}};
-    }
-
-    if (op == "tap" || op == "long_press")
-    {
-        QPointF point;
-        QJsonObject error;
-        bool scrolled = false;
-        if (!resolvePoint(request, point, error, scrolled))
-        {
-            return error;
-        }
-        if (op == "tap")
-        {
-            return withScrolled(fromResult(actions::tap(point)), scrolled);
-        }
-        return withScrolled(fromResult(actions::longPress(point, request.value("duration").toInt(0))), scrolled);
-    }
-
-    if (op == "scroll")
-    {
-        QJsonObject error;
-        QQuickItem* item = resolveItem(request, error);
-        if (!item)
-        {
-            return error;
-        }
-        const bool scrolled = actions::scrollIntoView(item);
-        const QRectF rect = scene::sceneRect(item);
-        return QJsonObject {{"ok", true}, {"scrolled", scrolled},
-            {"rect", QJsonObject {{"x", rect.x()}, {"y", rect.y()}, {"width", rect.width()}, {"height", rect.height()}}}};
-    }
-
-    if (op == "swipe")
-    {
-        QPointF from;
-        QJsonObject error;
-        bool scrolled = false;
-        if (!resolvePoint(request, from, error, scrolled))
-        {
-            return error;
-        }
-
-        if (!request.contains("to_x") || !request.contains("to_y"))
-        {
-            return failure("'to_x' and 'to_y' are required");
-        }
-        const QPointF to(request.value("to_x").toDouble(), request.value("to_y").toDouble());
-        return withScrolled(fromResult(actions::swipe(from, to, request.value("duration").toInt(0))), scrolled);
-    }
-
-    if (op == "type")
-    {
-        return fromResult(actions::typeText(request.value("text").toString()));
-    }
-
-    if (op == "key")
-    {
-        return fromResult(actions::pressKey(request.value("key").toString()));
-    }
-
-    if (op == "get")
-    {
-        QJsonObject error;
-        QQuickItem* item = resolveItem(request, error);
-        if (!item)
-        {
-            return error;
-        }
-
-        const QString name = request.value("prop").toString();
-        if (name.isEmpty())
-        {
-            return QJsonObject {{"ok", true}, {"item", scene::itemToJson(item, treeOptions(request))}};
-        }
-
-        const QVariant value = item->property(name.toUtf8().constData());
-        if (!value.isValid())
-        {
-            return failure(QStringLiteral("no property '%1' on %2").arg(name, scene::itemType(item)));
-        }
-        return QJsonObject {{"ok", true}, {"value", scene::variantToJson(value)}};
-    }
-
-    if (op == "set")
-    {
-        QJsonObject error;
-        QQuickItem* item = resolveItem(request, error);
-        if (!item)
-        {
-            return error;
-        }
-
-        const QString name = request.value("prop").toString();
-        if (name.isEmpty())
-        {
-            return failure("'prop' is required");
-        }
-        if (!item->setProperty(name.toUtf8().constData(), request.value("value").toVariant()))
-        {
-            return failure(QStringLiteral("could not set '%1' on %2").arg(name, scene::itemType(item)));
-        }
-        return QJsonObject {{"ok", true}};
-    }
-
-    if (op == "invoke")
-    {
-        QJsonObject error;
-        QQuickItem* item = resolveItem(request, error);
-        if (!item)
-        {
-            return error;
-        }
-
-        const QString method = request.value("method").toString();
-        if (method.isEmpty())
-        {
-            return failure("'method' is required");
-        }
-
-        const QJsonArray args = request.value("args").toArray();
-        if (args.size() > 3)
-        {
-            return failure("at most 3 arguments are supported");
-        }
-
-        QVariant returned;
-        QVariant a0 = args.size() > 0 ? args.at(0).toVariant() : QVariant();
-        QVariant a1 = args.size() > 1 ? args.at(1).toVariant() : QVariant();
-        QVariant a2 = args.size() > 2 ? args.at(2).toVariant() : QVariant();
-
-        bool invoked = false;
-        switch (args.size())
-        {
-        case 0:
-            invoked = QMetaObject::invokeMethod(
-                item, method.toUtf8().constData(), Qt::DirectConnection, Q_RETURN_ARG(QVariant, returned));
-            break;
-        case 1:
-            invoked = QMetaObject::invokeMethod(item, method.toUtf8().constData(), Qt::DirectConnection,
-                Q_RETURN_ARG(QVariant, returned), Q_ARG(QVariant, a0));
-            break;
-        case 2:
-            invoked = QMetaObject::invokeMethod(item, method.toUtf8().constData(), Qt::DirectConnection,
-                Q_RETURN_ARG(QVariant, returned), Q_ARG(QVariant, a0), Q_ARG(QVariant, a1));
-            break;
-        default:
-            invoked = QMetaObject::invokeMethod(item, method.toUtf8().constData(), Qt::DirectConnection,
-                Q_RETURN_ARG(QVariant, returned), Q_ARG(QVariant, a0), Q_ARG(QVariant, a1), Q_ARG(QVariant, a2));
-            break;
-        }
-
-        if (!invoked)
-        {
-            return failure(QStringLiteral("could not invoke '%1' on %2").arg(method, scene::itemType(item)));
-        }
-        return QJsonObject {{"ok", true}, {"result", scene::variantToJson(returned)}};
-    }
-
-    if (op == "screenshot")
-    {
-        const QString path = request.value("path").toString();
-        if (path.isEmpty())
-        {
-            return failure("'path' is required");
-        }
-        const auto result = actions::screenshot(path);
-        if (!result.ok)
-        {
-            return failure(result.error);
-        }
-        return QJsonObject {{"ok", true}, {"path", path}};
-    }
-
-    if (op == "wait")
-    {
-        const QString mode = request.value("mode").toString("settled");
-        const int timeout = request.value("timeout").toInt(DefaultTimeoutMs);
-        const bool hidden = request.value("hidden").toBool(false);
-
-        if (mode == "settled")
-        {
-            return fromResult(actions::waitSettled(request.value("quiet").toInt(300), timeout));
-        }
-        if (mode == "transition")
-        {
-            return fromResult(actions::waitTransitionDone(timeout));
-        }
-        if (mode == "appears" || mode == "disappears")
-        {
-            return fromResult(
-                actions::waitSelector(request.value("selector").toString(), mode == "appears", hidden, timeout));
-        }
-        if (mode == "signal")
-        {
-            return fromResult(actions::waitSignal(
-                request.value("selector").toString(), request.value("signal").toString(), hidden, timeout));
-        }
-        return failure(QStringLiteral("unknown wait mode '%1'").arg(mode));
-    }
-
-    return failure(QStringLiteral("unknown op '%1'").arg(op));
+    return (*handler)(request);
 }
 
 } // namespace guicontrol

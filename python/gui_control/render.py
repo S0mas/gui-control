@@ -2,36 +2,9 @@ import os
 
 KEEP_TYPES_VARIABLE = "GUI_CONTROL_KEEP_TYPES"
 
-COMPACT_CONTENT_PROPS = ("text", "displayText", "placeholderText", "value", "checked", "currentValue", "title")
-
-COMPACT_TYPES = frozenset({
-    "QQuickText",
-    "QQuickTextInput",
-    "QQuickTextEdit",
-    "QQuickImage",
-    "QQuickListView",
-    "QQuickGridView",
-    "QQuickPathView",
-    "QQuickStackView",
-    "QQuickSwipeView",
-})
-
-COMPACT_TYPE_MARKERS = ("Popup", "Dialog", "Drawer", "Overlay")
-
-GENERIC_CONTAINER_TYPES = (
-    "QQuickItem",
-    "QQuickRootItem",
-    "QQuickContentItem",
-    "QQuickControl",
-    "QQuickLoader",
-    "QQuickRectangle",
-    "QQuickMouseArea",
-    "QQuickRow",
-    "QQuickColumn",
-    "QQuickGrid",
-    "QQuickFlow",
-)
-GENERIC_CONTAINER_MARKERS = ("Layout", "Repeater")
+CONTAINER_ROLE = "container"
+GENERIC_ITEM_ROLE = "item"
+VIEW_TYPE_SUFFIX = "View"
 
 
 def keep_types_from_environment():
@@ -88,21 +61,17 @@ def _truncation(node, indent):
     return []
 
 
-def render(node, indent=0, lines=None):
-    lines = [] if lines is None else lines
+def _render(node, indent, lines):
     lines.append(_head(node, indent, node.get("props") or {}))
     lines.extend(_truncation(node, indent + 1))
     for child in node.get("children") or []:
-        render(child, indent + 1, lines)
-    return lines
+        _render(child, indent + 1, lines)
 
 
 def render_tree(tree):
-    if not isinstance(tree, list):
-        return render(tree)
     lines = []
-    for node in tree:
-        render(node, 0, lines)
+    for node in tree if isinstance(tree, list) else [tree]:
+        _render(node, 0, lines)
     return lines
 
 
@@ -121,49 +90,41 @@ def render_candidates(candidates):
     return lines
 
 
-def _is_generic_container(node_type):
-    return node_type in GENERIC_CONTAINER_TYPES or any(marker in node_type for marker in GENERIC_CONTAINER_MARKERS)
-
-
-def is_compact_node(node, keep_types=frozenset()):
+def _content(node, content_props):
     props = node.get("props") or {}
-    if any(key in props for key in COMPACT_CONTENT_PROPS):
-        return True
+    return {key: props[key] for key in content_props if key in props}
+
+
+def is_compact_node(node, content_props=(), keep_types=frozenset()):
     node_type = node.get("type", "")
-    if node.get("objectName") and not _is_generic_container(node_type):
+    if node_type in keep_types or _content(node, content_props):
         return True
-    if node_type in COMPACT_TYPES or node_type in keep_types or node_type.endswith("View"):
+    role = node.get("role", GENERIC_ITEM_ROLE)
+    if role == CONTAINER_ROLE:
+        return False
+    if role != GENERIC_ITEM_ROLE:
         return True
-    return any(marker in node_type for marker in COMPACT_TYPE_MARKERS)
+    return bool(node.get("objectName")) or node_type.endswith(VIEW_TYPE_SUFFIX)
 
 
-def _content_values(node):
-    props = node.get("props") or {}
-    return frozenset(repr(props[key]) for key in COMPACT_CONTENT_PROPS if key in props)
-
-
-def render_compact(node, indent=0, lines=None, keep_types=frozenset(), values_shown_above=frozenset()):
-    lines = [] if lines is None else lines
-    child_indent = indent
-    values = _content_values(node)
+def _render_compact(node, indent, lines, content_props, keep_types, values_shown_above):
+    content = _content(node, content_props)
+    values = frozenset(repr(value) for value in content.values())
     repeats_its_owner = bool(values) and values <= values_shown_above
+    child_indent = indent
 
-    if is_compact_node(node, keep_types) and not repeats_its_owner:
-        props = node.get("props") or {}
-        lines.append(_head(node, indent, {key: props[key] for key in COMPACT_CONTENT_PROPS if key in props}))
+    if is_compact_node(node, content_props, keep_types) and not repeats_its_owner:
+        lines.append(_head(node, indent, content))
         child_indent = indent + 1
         values_shown_above = values
 
     lines.extend(_truncation(node, child_indent))
     for child in node.get("children") or []:
-        render_compact(child, child_indent, lines, keep_types, values_shown_above)
-    return lines
+        _render_compact(child, child_indent, lines, content_props, keep_types, values_shown_above)
 
 
-def render_compact_tree(tree, keep_types=frozenset()):
-    if not isinstance(tree, list):
-        return render_compact(tree, keep_types=keep_types)
+def render_compact_tree(tree, content_props=(), keep_types=frozenset()):
     lines = []
-    for node in tree:
-        render_compact(node, 0, lines, keep_types)
+    for node in tree if isinstance(tree, list) else [tree]:
+        _render_compact(node, 0, lines, tuple(content_props), keep_types, frozenset())
     return lines

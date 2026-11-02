@@ -90,7 +90,7 @@ def test_settle_can_be_switched_off():
 
 
 def test_scroll_down_swipes_from_low_to_high_inside_the_container():
-    client = FakeClient({"QQuickListView": [{"rect": {"x": 0, "y": 100, "width": 200, "height": 100}}]})
+    client = FakeClient({"[role=scrollable][0]": [{"rect": {"x": 0, "y": 100, "width": 200, "height": 100}}]})
     Gui(client, ObjectMap({})).scroll("down")
     swipe = next(call[1] for call in client.calls if call[0] == "swipe")
     assert swipe["point"] == (100, 180)

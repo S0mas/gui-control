@@ -1,5 +1,7 @@
 #include "Scene.hpp"
 
+#include <algorithm>
+
 #include <QColor>
 #include <QGuiApplication>
 #include <QMetaObject>
@@ -16,6 +18,114 @@ namespace
 {
 
 constexpr int MaxCandidates = 20;
+
+const QString RolePredicate = QStringLiteral("role");
+const QString BuiltInTypePrefix = QStringLiteral("QQuick");
+const QString ContainerRole = QStringLiteral("container");
+const QString GenericItemRole = QStringLiteral("item");
+
+struct RoleOfBaseClass
+{
+    const char* className;
+    const char* role;
+};
+
+constexpr RoleOfBaseClass RolesByBaseClass[] = {
+    {"QQuickPopupItem", "popup"},
+    {"QQuickAbstractButton", "button"},
+    {"QQuickTextInput", "input"},
+    {"QQuickTextEdit", "input"},
+    {"QQuickSlider", "input"},
+    {"QQuickRangeSlider", "input"},
+    {"QQuickSpinBox", "input"},
+    {"QQuickComboBox", "input"},
+    {"QQuickDial", "input"},
+    {"QQuickTumbler", "input"},
+    {"QQuickStackView", "page"},
+    {"QQuickSwipeView", "page"},
+    {"QQuickPage", "page"},
+    {"QQuickFlickable", "scrollable"},
+    {"QQuickPathView", "scrollable"},
+    {"QQuickText", "text"},
+    {"QQuickImageBase", "image"},
+};
+
+constexpr const char* PlainContainerTypes[] = {
+    "QQuickItem",
+    "QQuickRectangle",
+    "QQuickLoader",
+    "QQuickMouseArea",
+    "QQuickRepeater",
+    "QQuickRootItem",
+    "QQuickContentItem",
+    "QQuickControl",
+    "QQuickOverlay",
+};
+
+constexpr const char* ContainerBaseClasses[] = {
+    "QQuickLayout",
+    "QQuickBasePositioner",
+};
+
+const QStringList DefaultProperties {
+    "text",
+    "displayText",
+    "placeholderText",
+    "value",
+    "from",
+    "to",
+    "stepSize",
+    "currentIndex",
+    "currentValue",
+    "name",
+    "source",
+    "color",
+    "checked",
+    "selected",
+    "readOnly",
+    "wrap",
+    "title",
+    "label",
+};
+
+const QStringList ContentProperties {
+    "text",
+    "displayText",
+    "placeholderText",
+    "value",
+    "checked",
+    "currentValue",
+    "title",
+};
+
+bool isWanted(const QString& name, const TreeOptions& options)
+{
+    switch (options.selection)
+    {
+    case PropertySelection::Defaults:
+        return DefaultProperties.contains(name);
+    case PropertySelection::Listed:
+        return options.props.contains(name);
+    case PropertySelection::Declared:
+    case PropertySelection::Every:
+        return true;
+    }
+    return false;
+}
+
+bool isPlainContainer(const QQuickItem* item)
+{
+    const QString type = itemType(item);
+    if (!type.startsWith(BuiltInTypePrefix))
+    {
+        return false;
+    }
+    const bool plainType = std::ranges::any_of(
+        PlainContainerTypes, [&type](const char* name) { return type == QLatin1String(name); });
+    const bool layoutOrPositioner = std::ranges::any_of(
+        ContainerBaseClasses, [item](const char* name) { return item->inherits(name); });
+    return plainType || layoutOrPositioner;
+}
 
 bool isAnyType(const QString& type)
 {
@@ -77,6 +187,14 @@ bool matchesSegment(const QQuickItem* item, const Segment& segment)
     }
     for (const auto& predicate : segment.predicates)
     {
+        if (predicate.first == RolePredicate)
+        {
+            if (itemRole(item) != predicate.second)
+            {
+                return false;
+            }
+            continue;
+        }
         bool found = false;
         const QString actual = propertyAsString(item, predicate.first, found);
         if (!found || actual != predicate.second)
@@ -249,6 +367,23 @@ QString itemType(const QQuickItem* item)
     return QString::fromLatin1(item->metaObject()->className()).split('_').first();
 }
 
+QString itemRole(const QQuickItem* item)
+{
+    for (const RoleOfBaseClass& entry : RolesByBaseClass)
+    {
+        if (item->inherits(entry.className))
+        {
+            return QString::fromLatin1(entry.role);
+        }
+    }
+    return isPlainContainer(item) ? ContainerRole : GenericItemRole;
+}
+
+QStringList contentProperties()
+{
+    return ContentProperties;
+}
+
 QRectF sceneRect(const QQuickItem* item)
 {
     return item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
@@ -307,6 +442,7 @@ QJsonObject itemToJson(const QQuickItem* item, const TreeOptions& options, int d
 {
     QJsonObject json;
     json["type"] = itemType(item);
+    json["role"] = itemRole(item);
     if (!item->objectName().isEmpty())
     {
         json["objectName"] = item->objectName();
@@ -339,8 +475,9 @@ QJsonObject itemToJson(const QQuickItem* item, const TreeOptions& options, int d
 
     QJsonObject properties;
     const QMetaObject* meta = item->metaObject();
-    const int inherited = QQuickItem::staticMetaObject.propertyCount();
-    for (int index = options.allProps ? 0 : inherited; index < meta->propertyCount(); ++index)
+    const int firstDeclared = QQuickItem::staticMetaObject.propertyCount();
+    const int first = options.selection == PropertySelection::Every ? 0 : firstDeclared;
+    for (int index = first; index < meta->propertyCount(); ++index)
     {
         const QMetaProperty property = meta->property(index);
         if (!property.isReadable())
@@ -348,7 +485,7 @@ QJsonObject itemToJson(const QQuickItem* item, const TreeOptions& options, int d
             continue;
         }
         const QString name = QString::fromLatin1(property.name());
-        if (!options.props.isEmpty() && !options.props.contains(name))
+        if (!isWanted(name, options))
         {
             continue;
         }

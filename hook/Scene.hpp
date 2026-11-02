@@ -21,15 +21,27 @@ QQuickWindow* window();
 
 QString itemType(const QQuickItem* item);
 
+QString itemRole(const QQuickItem* item);
+
+QStringList contentProperties();
+
 QRectF sceneRect(const QQuickItem* item);
 
 QJsonValue variantToJson(const QVariant& value);
+
+enum class PropertySelection
+{
+    Defaults,
+    Listed,
+    Declared,
+    Every,
+};
 
 struct TreeOptions
 {
     int maxDepth = -1;
     bool includeHidden = false;
-    bool allProps = false;
+    PropertySelection selection = PropertySelection::Defaults;
     QStringList props;
 };
 
